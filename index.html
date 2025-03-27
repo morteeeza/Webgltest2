@@ -64,7 +64,7 @@
 <body>
     <div id="loading">Loading...</div>
     <div id="start-overlay" style="display: none;">
-        <div>Click and drag</div>
+        <div>Click and drag to look around</div>
         <button id="start-button">Start</button>
     </div>
     <div id="unity-container">
@@ -89,7 +89,6 @@
 
         let unityInstance;
 
-        // Load Unity but wait for user input to start it (fix audio policy)
         createUnityInstance(canvas, {
             dataUrl: "Build/39.data",
             frameworkUrl: "Build/39.framework.js",
@@ -103,19 +102,39 @@
         }).then((instance) => {
             unityInstance = instance;
             loadingScreen.style.display = 'none';
-            startOverlay.style.display = 'flex'; // Show click/drag overlay
+            startOverlay.style.display = 'flex';
         }).catch((err) => {
             loadingScreen.innerText = "Failed to load game.";
             console.error(err);
         });
 
-        startButton.addEventListener("click", () => {
+        // Resume audio safely across all iOS browsers
+        function resumeAudio() {
             startOverlay.style.display = "none";
-            // Resume Unity audio context
-            if (unityInstance && unityInstance.Module && unityInstance.Module.audioContext) {
-                unityInstance.Module.audioContext.resume();
-            }
-        });
+
+            setTimeout(() => {
+                try {
+                    if (
+                        unityInstance &&
+                        unityInstance.Module &&
+                        unityInstance.Module.audioContext &&
+                        typeof unityInstance.Module.audioContext.resume === "function"
+                    ) {
+                        unityInstance.Module.audioContext.resume().then(() => {
+                            console.log("Audio resumed!");
+                        }).catch((e) => {
+                            console.warn("Audio resume failed", e);
+                        });
+                    }
+                } catch (e) {
+                    console.error("Audio resume error:", e);
+                }
+            }, 100); // slight delay helps iOS Safari
+        }
+
+        // Use both touchend and click for best mobile support
+        startButton.addEventListener("click", resumeAudio);
+        startButton.addEventListener("touchend", resumeAudio);
     </script>
 </body>
 </html>
