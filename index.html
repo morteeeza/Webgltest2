@@ -47,6 +47,7 @@
             z-index: 9999;
             font-size: 1.5em;
             flex-direction: column;
+            pointer-events: auto;
         }
 
             #start-overlay button {
@@ -64,31 +65,38 @@
 <body>
     <div id="loading">Loading...</div>
     <div id="start-overlay" style="display: none;">
-        <div>Click and drag to look around</div>
+        <div>Click and drag</div>
         <button id="start-button">Start</button>
     </div>
     <div id="unity-container">
         <canvas id="unity-canvas" tabindex="-1"></canvas>
     </div>
 
+    <!-- Silent audio for iOS mute bypass -->
+    <audio id="silent-audio" playsinline style="display: none;">
+        <source src="data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA" type="audio/mp3">
+    </audio>
+
     <script src="Build/39.loader.js"></script>
     <script>
         const canvas = document.getElementById("unity-canvas");
-        const loadingScreen = document.getElementById("loading");
-        const startOverlay = document.getElementById("start-overlay");
-        const startButton = document.getElementById("start-button");
-
-        function resizeCanvas() {
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = canvas.clientWidth * dpr;
-            canvas.height = canvas.clientHeight * dpr;
-        }
-
-        resizeCanvas();
-        window.addEventListener("resize", resizeCanvas);
+        const loading = document.getElementById("loading");
+        const overlay = document.getElementById("start-overlay");
+        const button = document.getElementById("start-button");
+        const silentAudio = document.getElementById("silent-audio");
 
         let unityInstance = null;
 
+        // Resize optimization: only trigger on animation frame
+        const resizeCanvas = () => {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap to 2x for performance
+            canvas.width = canvas.clientWidth * dpr;
+            canvas.height = canvas.clientHeight * dpr;
+        };
+        window.addEventListener("resize", () => requestAnimationFrame(resizeCanvas));
+        resizeCanvas();
+
+        // Unity Loader
         createUnityInstance(canvas, {
             dataUrl: "Build/39.data",
             frameworkUrl: "Build/39.framework.js",
@@ -98,49 +106,37 @@
             productName: "test2",
             productVersion: "1.0",
             matchWebGLToCanvasSize: false,
-            devicePixelRatio: window.devicePixelRatio || 1
+            devicePixelRatio: 1 // we handle it manually above
         }).then((instance) => {
             unityInstance = instance;
-            loadingScreen.style.display = 'none';
-            startOverlay.style.display = 'flex';
+            loading.style.display = "none";
+            overlay.style.display = "flex";
         }).catch((err) => {
-            loadingScreen.innerText = "Failed to load game.";
+            loading.innerText = "❌ Failed to load game";
             console.error(err);
         });
 
-        function tryResumeAudio() {
-            if (
-                unityInstance &&
-                unityInstance.Module &&
-                unityInstance.Module.audioContext &&
-                typeof unityInstance.Module.audioContext.resume === "function"
-            ) {
-                const ctx = unityInstance.Module.audioContext;
-                if (ctx.state === "suspended") {
-                    ctx.resume().then(() => {
-                        console.log("✅ Audio resumed!");
-                    }).catch((e) => {
-                        console.warn("❌ Audio resume failed:", e);
-                    });
-                } else {
-                    console.log("🔊 Audio already running.");
-                }
-            } else {
-                console.warn("⏳ AudioContext not ready yet, retrying...");
-                setTimeout(tryResumeAudio, 100);
+        function unlockiOSAudio() {
+            if (silentAudio) {
+                silentAudio.play().catch(() => { });
             }
         }
 
-        startButton.addEventListener("click", () => {
-            startOverlay.style.display = "none";
-            tryResumeAudio();
-        });
+        function tryResumeUnityAudio() {
+            const ctx = unityInstance?.Module?.audioContext;
+            if (ctx?.state === "suspended") {
+                ctx.resume().catch(() => { });
+            }
+        }
 
-        // Extra fallback for touch
-        startButton.addEventListener("touchend", () => {
-            startOverlay.style.display = "none";
-            tryResumeAudio();
-        });
+        const startGame = () => {
+            overlay.style.display = "none";
+            unlockiOSAudio();
+            tryResumeUnityAudio();
+        };
+
+        button.addEventListener("click", startGame);
+        button.addEventListener("touchend", startGame);
     </script>
 </body>
 </html>
