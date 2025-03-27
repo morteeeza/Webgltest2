@@ -87,7 +87,7 @@
         resizeCanvas();
         window.addEventListener("resize", resizeCanvas);
 
-        let unityInstance;
+        let unityInstance = null;
 
         createUnityInstance(canvas, {
             dataUrl: "Build/39.data",
@@ -108,33 +108,39 @@
             console.error(err);
         });
 
-        // Resume audio safely across all iOS browsers
-        function resumeAudio() {
-            startOverlay.style.display = "none";
-
-            setTimeout(() => {
-                try {
-                    if (
-                        unityInstance &&
-                        unityInstance.Module &&
-                        unityInstance.Module.audioContext &&
-                        typeof unityInstance.Module.audioContext.resume === "function"
-                    ) {
-                        unityInstance.Module.audioContext.resume().then(() => {
-                            console.log("Audio resumed!");
-                        }).catch((e) => {
-                            console.warn("Audio resume failed", e);
-                        });
-                    }
-                } catch (e) {
-                    console.error("Audio resume error:", e);
+        function tryResumeAudio() {
+            if (
+                unityInstance &&
+                unityInstance.Module &&
+                unityInstance.Module.audioContext &&
+                typeof unityInstance.Module.audioContext.resume === "function"
+            ) {
+                const ctx = unityInstance.Module.audioContext;
+                if (ctx.state === "suspended") {
+                    ctx.resume().then(() => {
+                        console.log("✅ Audio resumed!");
+                    }).catch((e) => {
+                        console.warn("❌ Audio resume failed:", e);
+                    });
+                } else {
+                    console.log("🔊 Audio already running.");
                 }
-            }, 100); // slight delay helps iOS Safari
+            } else {
+                console.warn("⏳ AudioContext not ready yet, retrying...");
+                setTimeout(tryResumeAudio, 100);
+            }
         }
 
-        // Use both touchend and click for best mobile support
-        startButton.addEventListener("click", resumeAudio);
-        startButton.addEventListener("touchend", resumeAudio);
+        startButton.addEventListener("click", () => {
+            startOverlay.style.display = "none";
+            tryResumeAudio();
+        });
+
+        // Extra fallback for touch
+        startButton.addEventListener("touchend", () => {
+            startOverlay.style.display = "none";
+            tryResumeAudio();
+        });
     </script>
 </body>
 </html>
