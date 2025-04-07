@@ -22,15 +22,43 @@
             top: 0;
             left: 0;
         }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            text-align: center;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% {
+                opacity: 0.2;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .loading-text {
+            animation: fadeInOut 2s infinite;
+        }
     </style>
 </head>
 <body>
+    <div id="loading" class="loading-text">Loading... 0%</div>
     <canvas id="unity-canvas" tabindex="-1"></canvas>
     <script src="Build/test1.loader.js"></script>
     <script>
         if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
             document.body.style.textAlign = "left";
         }
+
+        var loadingText = document.getElementById("loading");
 
         createUnityInstance(document.querySelector("#unity-canvas"), {
             arguments: [],
@@ -41,8 +69,13 @@
             companyName: "DefaultCompany",
             productName: "NewHy",
             productVersion: "0.1.0",
+        }, (progress) => {
+            loadingText.textContent = "Loading... " + Math.round(progress * 100) + "%";
+        }).then((unityInstance) => {
+            loadingText.style.display = "none";
         }).catch((error) => {
             console.error("Unity failed to load:", error);
+            loadingText.textContent = "Error loading Unity.";
             alert("Error loading Unity: " + error);
         });
     </script>
