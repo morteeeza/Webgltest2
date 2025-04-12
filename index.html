@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
+    <title>AOP</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #231F20;
+        }
+
+        #unity-canvas {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <script src="Build/TestOut.loader.js"></script>
+    <script>
+        let unityInstance;
+        createUnityInstance(document.querySelector("#unity-canvas"), {
+            dataUrl: "Build/TestOut.data",
+            frameworkUrl: "Build/TestOut.framework.js",
+            codeUrl: "Build/TestOut.wasm",
+            streamingAssetsUrl: "StreamingAssets",
+            companyName: "DefaultCompany",
+            productName: "new2",
+            productVersion: "0.1.0"
+        }).then((instance) => {
+            unityInstance = instance;
+            // Send updated window position data every 100ms.
+            setInterval(() => {
+                if (!unityInstance) return;
+                const screenX = window.screenX;
+                // Using screen.availWidth for the current available width of the display.
+                const availWidth = window.screen.availWidth;
+                const positionData = `${screenX},${availWidth}`;
+                unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
+                unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
+            }, 100);
+        }).catch((error) => {
+            alert("Error loading Unity: " + error);
+        });
+    </script>
+</body>
+</html>
