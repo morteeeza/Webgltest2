@@ -2,7 +2,8 @@
 <html lang="en-us">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
+    <meta name="viewport"
+          content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
     <title>AOP</title>
     <style>
         body {
@@ -26,6 +27,53 @@
     <script src="Build/TestOut.loader.js"></script>
     <script>
         let unityInstance;
+        // Global object to store the latest orientation data.
+        const orientationData = {
+            alpha: 0,
+            beta: 0,
+            gamma: 0
+        };
+
+        // Handle the device orientation event.
+        function handleOrientation(event) {
+            orientationData.alpha = event.alpha || 0;
+            orientationData.beta = event.beta || 0;
+            orientationData.gamma = event.gamma || 0;
+        }
+
+        // Check if we need to request permission (iOS 13+).
+        if (
+            window.DeviceOrientationEvent &&
+            typeof DeviceOrientationEvent.requestPermission === "function"
+        ) {
+            // Permission must be requested from a user gesture.
+            document.body.addEventListener(
+                "click",
+                () => {
+                    DeviceOrientationEvent.requestPermission()
+                        .then((response) => {
+                            if (response === "granted") {
+                                window.addEventListener(
+                                    "deviceorientation",
+                                    handleOrientation,
+                                    true
+                                );
+                            } else {
+                                console.error("Device orientation permission denied.");
+                            }
+                        })
+                        .catch((error) => {
+                            console.error("Error requesting device orientation permission:", error);
+                        });
+                },
+                { once: true }
+            );
+        } else {
+            // For non iOS 13+ devices or browsers which do not require permission.
+            window.addEventListener("deviceorientation", handleOrientation, true);
+        }
+
+        // Create Unity instance.
         createUnityInstance(document.querySelector("#unity-canvas"), {
             dataUrl: "Build/TestOut.data",
             frameworkUrl: "Build/TestOut.framework.js",
@@ -34,21 +82,22 @@
             companyName: "DefaultCompany",
             productName: "new2",
             productVersion: "0.1.0"
-        }).then((instance) => {
-            unityInstance = instance;
-            // Send updated window position data every 100ms.
-            setInterval(() => {
-                if (!unityInstance) return;
-                const screenX = window.screenX;
-                // Using screen.availWidth for the current available width of the display.
-                const availWidth = window.screen.availWidth;
-                const positionData = `${screenX},${availWidth}`;
-                unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
-                unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
-            }, 100);
-        }).catch((error) => {
-            alert("Error loading Unity: " + error);
-        });
+        })
+            .then((instance) => {
+                unityInstance = instance;
+                // Send updated gyroscope (orientation) data every 100ms.
+                setInterval(() => {
+                    if (!unityInstance) return;
+                    // Build a comma-separated string from the orientation data.
+                    const dataString = `${orientationData.alpha},${orientationData.beta},${orientationData.gamma}`;
+                    // Send the orientation data to your Unity game objects.
+                    unityInstance.SendMessage("LeftRoom", "OnWindowPosition", dataString);
+                    unityInstance.SendMessage("RightRoom", "OnWindowPosition", dataString);
+                }, 100);
+            })
+            .catch((error) => {
+                alert("Error loading Unity: " + error);
+            });
     </script>
 </body>
 </html>
