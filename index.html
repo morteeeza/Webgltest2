@@ -2,8 +2,7 @@
 <html lang="en-us">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport"
-          content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
     <title>AOP</title>
     <style>
         body {
@@ -20,60 +19,23 @@
             top: 0;
             left: 0;
         }
+        /* Simple style for the enable gyro button */
+        #enableGyroBtn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            font-size: 16px;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
     <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <button id="enableGyroBtn" style="display:none;">Enable Gyro</button>
     <script src="Build/TestOut.loader.js"></script>
     <script>
         let unityInstance;
-        // Global object to store the latest orientation data.
-        const orientationData = {
-            alpha: 0,
-            beta: 0,
-            gamma: 0
-        };
-
-        // Handle the device orientation event.
-        function handleOrientation(event) {
-            orientationData.alpha = event.alpha || 0;
-            orientationData.beta = event.beta || 0;
-            orientationData.gamma = event.gamma || 0;
-        }
-
-        // Check if we need to request permission (iOS 13+).
-        if (
-            window.DeviceOrientationEvent &&
-            typeof DeviceOrientationEvent.requestPermission === "function"
-        ) {
-            // Permission must be requested from a user gesture.
-            document.body.addEventListener(
-                "click",
-                () => {
-                    DeviceOrientationEvent.requestPermission()
-                        .then((response) => {
-                            if (response === "granted") {
-                                window.addEventListener(
-                                    "deviceorientation",
-                                    handleOrientation,
-                                    true
-                                );
-                            } else {
-                                console.error("Device orientation permission denied.");
-                            }
-                        })
-                        .catch((error) => {
-                            console.error("Error requesting device orientation permission:", error);
-                        });
-                },
-                { once: true }
-            );
-        } else {
-            // For non iOS 13+ devices or browsers which do not require permission.
-            window.addEventListener("deviceorientation", handleOrientation, true);
-        }
-
-        // Create Unity instance.
         createUnityInstance(document.querySelector("#unity-canvas"), {
             dataUrl: "Build/TestOut.data",
             frameworkUrl: "Build/TestOut.framework.js",
@@ -82,22 +44,73 @@
             companyName: "DefaultCompany",
             productName: "new2",
             productVersion: "0.1.0"
-        })
-            .then((instance) => {
-                unityInstance = instance;
-                // Send updated gyroscope (orientation) data every 100ms.
-                setInterval(() => {
-                    if (!unityInstance) return;
-                    // Build a comma-separated string from the orientation data.
-                    const dataString = `${orientationData.alpha},${orientationData.beta},${orientationData.gamma}`;
-                    // Send the orientation data to your Unity game objects.
-                    unityInstance.SendMessage("LeftRoom", "OnWindowPosition", dataString);
-                    unityInstance.SendMessage("RightRoom", "OnWindowPosition", dataString);
-                }, 100);
-            })
-            .catch((error) => {
-                alert("Error loading Unity: " + error);
-            });
+        }).then((instance) => {
+            unityInstance = instance;
+
+            // Check if the device supports gyroscope events
+            if (window.DeviceOrientationEvent) {
+                // On iOS 13+ explicit permission is required.
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    // Display a button prompting the user to enable gyroscope access.
+                    const gyroBtn = document.getElementById('enableGyroBtn');
+                    gyroBtn.style.display = 'block';
+                    gyroBtn.addEventListener('click', function () {
+                        DeviceOrientationEvent.requestPermission().then(permissionState => {
+                            if (permissionState === 'granted') {
+                                window.addEventListener('deviceorientation', handleOrientation, true);
+                                gyroBtn.style.display = 'none';
+                            }
+                        }).catch(console.error);
+                    });
+                } else {
+                    // For devices/browsers that don’t require permission, add the event listener immediately.
+                    window.addEventListener('deviceorientation', handleOrientation, true);
+                }
+            } else {
+                // Fallback: if gyroscope is not available, use desktop behavior.
+                setInterval(sendScreenData, 100);
+            }
+        }).catch((error) => {
+            alert("Error loading Unity: " + error);
+        });
+
+        // This function handles data from the gyroscope.
+        function handleOrientation(event) {
+            // For this example, we’ll use the 'gamma' value (left/right tilt).
+            // You can adjust maxTilt to the range your scene expects.
+            const maxTilt = 30; // Maximum tilt angle in degrees to consider.
+            let gamma = event.gamma;
+            // Clamp gamma to be within [-maxTilt, maxTilt]
+            gamma = Math.max(-maxTilt, Math.min(maxTilt, gamma));
+            // Normalize gamma to [0, 1] range. (0 = max left tilt, 1 = max right tilt)
+            let normalized = (gamma + maxTilt) / (2 * maxTilt);
+
+            // In your Unity scripts, the left room uses a reversed factor relative to the right room.
+            // Here we simulate a screen position value using an arbitrary available width,
+            // for instance, 100 (you might adjust this mapping as needed).
+            const simulatedWidth = 100;
+            let leftScreenX = (1 - normalized) * simulatedWidth;
+            let rightScreenX = normalized * simulatedWidth;
+
+            // Form the data string following your existing format "value,availableWidth"
+            const leftData = `${leftScreenX},${simulatedWidth}`;
+            const rightData = `${rightScreenX},${simulatedWidth}`;
+
+            if (unityInstance) {
+                unityInstance.SendMessage("LeftRoom", "OnWindowPosition", leftData);
+                unityInstance.SendMessage("RightRoom", "OnWindowPosition", rightData);
+            }
+        }
+
+        // Desktop fallback function using the window's screen position.
+        function sendScreenData() {
+            if (!unityInstance) return;
+            const screenX = window.screenX;
+            const availWidth = window.screen.availWidth;
+            const positionData = `${screenX},${availWidth}`;
+            unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
+            unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
+        }
     </script>
 </body>
 </html>
