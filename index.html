@@ -32,9 +32,52 @@
             z-index: 10;
             display: none;
         }
+
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #231F20;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: sans-serif;
+            z-index: 100;
+        }
+
+        #loading-bar {
+            width: 300px;
+            height: 20px;
+            background-color: #555;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        #loading-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #fff;
+            transition: width 0.2s ease;
+        }
+
+        #loading-text {
+            font-size: 20px;
+        }
     </style>
 </head>
 <body>
+    <div id="loading-overlay">
+        <div id="loading-text">Loading... 0%</div>
+        <div id="loading-bar">
+            <div id="loading-fill"></div>
+        </div>
+    </div>
+
     <canvas id="unity-canvas" tabindex="-1"></canvas>
     <button id="enable-gyro">Enable Gyroscope</button>
 
@@ -55,23 +98,16 @@
 
             function handleOrientation(event) {
                 const gamma = event.gamma || 0;
-
-                const minTilt = -15; // Max left tilt we care about
-                const maxTilt = 15;  // Max right tilt we care about
-
-                // Clamp to avoid extreme values
+                const minTilt = -15;
+                const maxTilt = 15;
                 const clampedGamma = Math.max(minTilt, Math.min(maxTilt, gamma));
-
-                // Map to full screen width
-                const normalized = (clampedGamma - minTilt) / (maxTilt - minTilt); // 0 to 1
+                const normalized = (clampedGamma - minTilt) / (maxTilt - minTilt);
                 const fakeScreenX = normalized * window.innerWidth;
-
                 sendPositionToUnity(fakeScreenX);
             }
 
             if (typeof DeviceOrientationEvent !== "undefined" &&
                 typeof DeviceOrientationEvent.requestPermission === "function") {
-                // iOS
                 enableBtn.style.display = 'block';
                 enableBtn.addEventListener('click', () => {
                     DeviceOrientationEvent.requestPermission()
@@ -87,7 +123,6 @@
                         .catch(console.error);
                 });
             } else {
-                // Android and other platforms
                 window.addEventListener('deviceorientation', handleOrientation);
                 useGyro = true;
             }
@@ -101,13 +136,17 @@
             companyName: "DefaultCompany",
             productName: "new2",
             productVersion: "0.1.0"
+        }, (progress) => {
+            const percent = Math.floor(progress * 100);
+            document.getElementById("loading-text").innerText = `Loading... ${percent}%`;
+            document.getElementById("loading-fill").style.width = percent + "%";
         }).then((instance) => {
             unityInstance = instance;
+            document.getElementById("loading-overlay").style.display = "none";
 
             if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
                 setupGyroControls();
             } else {
-                // Desktop fallback using screenX
                 setInterval(() => {
                     const screenX = window.screenX;
                     const availWidth = window.screen.availWidth;
