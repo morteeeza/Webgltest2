@@ -1,63 +1,115 @@
-<script>
-    let unityInstance;
-    let useGyro = false;
-
-    function sendPositionToUnity(x) {
-        const fakeScreenWidth = window.innerWidth;
-        const positionData = `${x},${fakeScreenWidth}`;
-        unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
-        unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
-    }
-
-    function setupGyroControls() {
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // iOS
-            DeviceOrientationEvent.requestPermission()
-                .then(response => {
-                    if (response === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation);
-                        useGyro = true;
-                    }
-                })
-                .catch(console.error);
-        } else {
-            // Android
-            window.addEventListener('deviceorientation', handleOrientation);
-            useGyro = true;
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
+    <title>AOP</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #231F20;
         }
-    }
 
-    function handleOrientation(event) {
-        const gamma = event.gamma; // left/right tilt in degrees
-        // Clamp and normalize gamma (-90 to 90) to (0 to screenWidth)
-        const fakeScreenX = ((gamma + 90) / 180) * window.innerWidth;
-        sendPositionToUnity(fakeScreenX);
-    }
-
-    createUnityInstance(document.querySelector("#unity-canvas"), {
-        dataUrl: "Build/TestOut.data",
-        frameworkUrl: "Build/TestOut.framework.js",
-        codeUrl: "Build/TestOut.wasm",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "new2",
-        productVersion: "0.1.0"
-    }).then((instance) => {
-        unityInstance = instance;
-
-        if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
-            setupGyroControls();
-        } else {
-            // Desktop fallback
-            setInterval(() => {
-                const screenX = window.screenX;
-                const availWidth = window.screen.availWidth;
-                const positionData = `${screenX},${availWidth}`;
-                unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
-                unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
-            }, 100);
+        #unity-canvas {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
-    }).catch((error) => {
-        alert("Error loading Unity: " + error);
-    });
-</script>
+
+        #enable-gyro {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 15px;
+            background: #ffffffaa;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            z-index: 10;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <button id="enable-gyro">Enable Gyroscope</button>
+
+    <script src="Build/TestOut.loader.js"></script>
+    <script>
+        let unityInstance;
+        let useGyro = false;
+
+        function sendPositionToUnity(x) {
+            const fakeScreenWidth = window.innerWidth;
+            const positionData = `${x},${fakeScreenWidth}`;
+            unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
+            unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
+        }
+
+        function setupGyroControls() {
+            const enableBtn = document.getElementById('enable-gyro');
+
+            function handleOrientation(event) {
+                const gamma = event.gamma || 0; // left/right tilt in degrees
+                const clampedGamma = Math.max(-90, Math.min(90, gamma));
+                const fakeScreenX = ((clampedGamma + 90) / 180) * window.innerWidth;
+                sendPositionToUnity(fakeScreenX);
+            }
+
+            if (typeof DeviceOrientationEvent !== "undefined" &&
+                typeof DeviceOrientationEvent.requestPermission === "function") {
+                // iOS
+                enableBtn.style.display = 'block';
+                enableBtn.addEventListener('click', () => {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(response => {
+                            if (response === 'granted') {
+                                window.addEventListener('deviceorientation', handleOrientation);
+                                enableBtn.style.display = 'none';
+                                useGyro = true;
+                            } else {
+                                alert('Gyroscope permission denied.');
+                            }
+                        })
+                        .catch(console.error);
+                });
+            } else {
+                // Android and other platforms
+                window.addEventListener('deviceorientation', handleOrientation);
+                useGyro = true;
+            }
+        }
+
+        createUnityInstance(document.querySelector("#unity-canvas"), {
+            dataUrl: "Build/TestOut.data",
+            frameworkUrl: "Build/TestOut.framework.js",
+            codeUrl: "Build/TestOut.wasm",
+            streamingAssetsUrl: "StreamingAssets",
+            companyName: "DefaultCompany",
+            productName: "new2",
+            productVersion: "0.1.0"
+        }).then((instance) => {
+            unityInstance = instance;
+
+            if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+                setupGyroControls();
+            } else {
+                // Desktop fallback using screenX
+                setInterval(() => {
+                    const screenX = window.screenX;
+                    const availWidth = window.screen.availWidth;
+                    const positionData = `${screenX},${availWidth}`;
+                    unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
+                    unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
+                }, 100);
+            }
+        }).catch((error) => {
+            alert("Error loading Unity: " + error);
+        });
+    </script>
+</body>
+</html>
