@@ -1,116 +1,63 @@
-<!DOCTYPE html>
-<html lang="en-us">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
-    <title>AOP</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #231F20;
+<script>
+    let unityInstance;
+    let useGyro = false;
+
+    function sendPositionToUnity(x) {
+        const fakeScreenWidth = window.innerWidth;
+        const positionData = `${x},${fakeScreenWidth}`;
+        unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
+        unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
+    }
+
+    function setupGyroControls() {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        useGyro = true;
+                    }
+                })
+                .catch(console.error);
+        } else {
+            // Android
+            window.addEventListener('deviceorientation', handleOrientation);
+            useGyro = true;
         }
+    }
 
-        #unity-canvas {
-            width: 100vw;
-            height: 100vh;
-            position: absolute;
-            top: 0;
-            left: 0;
+    function handleOrientation(event) {
+        const gamma = event.gamma; // left/right tilt in degrees
+        // Clamp and normalize gamma (-90 to 90) to (0 to screenWidth)
+        const fakeScreenX = ((gamma + 90) / 180) * window.innerWidth;
+        sendPositionToUnity(fakeScreenX);
+    }
+
+    createUnityInstance(document.querySelector("#unity-canvas"), {
+        dataUrl: "Build/TestOut.data",
+        frameworkUrl: "Build/TestOut.framework.js",
+        codeUrl: "Build/TestOut.wasm",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "new2",
+        productVersion: "0.1.0"
+    }).then((instance) => {
+        unityInstance = instance;
+
+        if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+            setupGyroControls();
+        } else {
+            // Desktop fallback
+            setInterval(() => {
+                const screenX = window.screenX;
+                const availWidth = window.screen.availWidth;
+                const positionData = `${screenX},${availWidth}`;
+                unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
+                unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
+            }, 100);
         }
-        /* Simple style for the enable gyro button */
-        #enableGyroBtn {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 10px;
-            font-size: 16px;
-            z-index: 10;
-        }
-    </style>
-</head>
-<body>
-    <canvas id="unity-canvas" tabindex="-1"></canvas>
-    <button id="enableGyroBtn" style="display:none;">Enable Gyro</button>
-    <script src="Build/TestOut.loader.js"></script>
-    <script>
-        let unityInstance;
-        createUnityInstance(document.querySelector("#unity-canvas"), {
-            dataUrl: "Build/TestOut.data",
-            frameworkUrl: "Build/TestOut.framework.js",
-            codeUrl: "Build/TestOut.wasm",
-            streamingAssetsUrl: "StreamingAssets",
-            companyName: "DefaultCompany",
-            productName: "new2",
-            productVersion: "0.1.0"
-        }).then((instance) => {
-            unityInstance = instance;
-
-            // Check if the device supports gyroscope events
-            if (window.DeviceOrientationEvent) {
-                // On iOS 13+ explicit permission is required.
-                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    // Display a button prompting the user to enable gyroscope access.
-                    const gyroBtn = document.getElementById('enableGyroBtn');
-                    gyroBtn.style.display = 'block';
-                    gyroBtn.addEventListener('click', function () {
-                        DeviceOrientationEvent.requestPermission().then(permissionState => {
-                            if (permissionState === 'granted') {
-                                window.addEventListener('deviceorientation', handleOrientation, true);
-                                gyroBtn.style.display = 'none';
-                            }
-                        }).catch(console.error);
-                    });
-                } else {
-                    // For devices/browsers that don’t require permission, add the event listener immediately.
-                    window.addEventListener('deviceorientation', handleOrientation, true);
-                }
-            } else {
-                // Fallback: if gyroscope is not available, use desktop behavior.
-                setInterval(sendScreenData, 100);
-            }
-        }).catch((error) => {
-            alert("Error loading Unity: " + error);
-        });
-
-        // This function handles data from the gyroscope.
-        function handleOrientation(event) {
-            // For this example, we’ll use the 'gamma' value (left/right tilt).
-            // You can adjust maxTilt to the range your scene expects.
-            const maxTilt = 30; // Maximum tilt angle in degrees to consider.
-            let gamma = event.gamma;
-            // Clamp gamma to be within [-maxTilt, maxTilt]
-            gamma = Math.max(-maxTilt, Math.min(maxTilt, gamma));
-            // Normalize gamma to [0, 1] range. (0 = max left tilt, 1 = max right tilt)
-            let normalized = (gamma + maxTilt) / (2 * maxTilt);
-
-            // In your Unity scripts, the left room uses a reversed factor relative to the right room.
-            // Here we simulate a screen position value using an arbitrary available width,
-            // for instance, 100 (you might adjust this mapping as needed).
-            const simulatedWidth = 100;
-            let leftScreenX = (1 - normalized) * simulatedWidth;
-            let rightScreenX = normalized * simulatedWidth;
-
-            // Form the data string following your existing format "value,availableWidth"
-            const leftData = `${leftScreenX},${simulatedWidth}`;
-            const rightData = `${rightScreenX},${simulatedWidth}`;
-
-            if (unityInstance) {
-                unityInstance.SendMessage("LeftRoom", "OnWindowPosition", leftData);
-                unityInstance.SendMessage("RightRoom", "OnWindowPosition", rightData);
-            }
-        }
-
-        // Desktop fallback function using the window's screen position.
-        function sendScreenData() {
-            if (!unityInstance) return;
-            const screenX = window.screenX;
-            const availWidth = window.screen.availWidth;
-            const positionData = `${screenX},${availWidth}`;
-            unityInstance.SendMessage("LeftRoom", "OnWindowPosition", positionData);
-            unityInstance.SendMessage("RightRoom", "OnWindowPosition", positionData);
-        }
-    </script>
-</body>
-</html>
+    }).catch((error) => {
+        alert("Error loading Unity: " + error);
+    });
+</script>
