@@ -54,9 +54,18 @@
             const enableBtn = document.getElementById('enable-gyro');
 
             function handleOrientation(event) {
-                const gamma = event.gamma || 0; // left/right tilt in degrees
-                const clampedGamma = Math.max(-90, Math.min(90, gamma));
-                const fakeScreenX = ((clampedGamma + 90) / 180) * window.innerWidth;
+                const gamma = event.gamma || 0;
+
+                const minTilt = -15; // Max left tilt we care about
+                const maxTilt = 15;  // Max right tilt we care about
+
+                // Clamp to avoid extreme values
+                const clampedGamma = Math.max(minTilt, Math.min(maxTilt, gamma));
+
+                // Map to full screen width
+                const normalized = (clampedGamma - minTilt) / (maxTilt - minTilt); // 0 to 1
+                const fakeScreenX = normalized * window.innerWidth;
+
                 sendPositionToUnity(fakeScreenX);
             }
 
